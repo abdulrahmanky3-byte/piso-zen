@@ -4,7 +4,7 @@ import { FRAME_COUNT, FRAMES_DIR, POSTER_PATH } from '@/lib/config';
 import { useFramePreloader } from '@/hooks/useFramePreloader';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 
-const SCROLL_VH = 1500;
+const SCROLL_VH = 2000;
 const DPR = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
 function buildFramePaths(count: number): string[] {
@@ -24,7 +24,6 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
   const isDesktop = useIsDesktop();
   const preloadProgress = useFramePreloader(isDesktop ?? false);
   const imgRefs = useRef<HTMLImageElement[]>([]);
-  const lastScrollRef = useRef(0);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -102,12 +101,6 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
         if (img) drawCover(img);
       }
 
-      // Add motion blur based on scroll velocity
-      const blurAmount = Math.min(Math.abs(scrolled - lastScrollRef.current) * 0.5, 3);
-      if (canvas) {
-        canvas.style.filter = `blur(${blurAmount}px)`;
-      }
-      lastScrollRef.current = scrolled;
     };
 
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -150,9 +143,7 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
             width: '100%',
             height: '100%',
             display: 'block',
-            filter: 'blur(0px)',
-            transition: 'filter 0.1s ease',
-          }}
+              }}
         />
       </div>
 
