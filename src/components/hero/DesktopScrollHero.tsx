@@ -4,7 +4,6 @@ import { FRAME_COUNT, FRAMES_DIR, POSTER_PATH } from '@/lib/config';
 import { useFramePreloader } from '@/hooks/useFramePreloader';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 
-const START_FRAME_COUNT = 20;
 const SCROLL_VH = 400;
 const DPR = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
@@ -22,12 +21,12 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameIndexRef = useRef(0);
   const [frameIndex, setFrameIndex] = useState(0);
-  const [isReady, setIsReady] = useState(false);
-  const [usePoster, setUsePoster] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const isDesktop = useIsDesktop();
   const preloadProgress = useFramePreloader(isDesktop ?? false);
   const imgRefs = useRef<HTMLImageElement[]>([]);
   const loadedCountRef = useRef(0);
+  const hasStartedRef = useRef(false);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -35,15 +34,9 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
     // Check prefers-reduced-motion
     if (typeof window !== 'undefined') {
       const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
-      setUsePoster(mql.matches);
-      const listener = (e: MediaQueryListEvent) => setUsePoster(e.matches);
-      mql.addEventListener('change', listener);
-      return () => mql.removeEventListener('change', listener);
+      if (mql.matches) return; // Skip animation for reduced motion
     }
-  }, [isDesktop]);
 
-  useEffect(() => {
-    if (!isDesktop || usePoster) return;
     const container = containerRef.current;
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
@@ -72,38 +65,36 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width / DPR, canvas.height / DPR);
     };
 
-    // Preload frames in batches
-    const preloadBatch = (start: number, end: number) => {
-      for (let i = start; i < end && i < total; i++) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          imgRefs.current[i] = img;
-          loadedCountRef.current++;
-          if (loadedCountRef.current === START_FRAME_COUNT && !isReady) {
-            setIsReady(true);
-          }
-          if (i === frameIndexRef.current) drawCover(img);
-        };
-        img.onerror = () => {
-          // Silently skip failed frames
-          loadedCountRef.current++;
-        };
-        img.src = frames[i];
-      }
-    };
+    // Preload ALL frames immediately (not just 20)
+    frames.forEach((src, i) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        imgRefs.current[i] = img;
+        loadedCountRef.current++;
+        // Start animation as soon as we have at least 1 frame
+        if (!hasStartedRef.current && loadedCountRef.current >= 1) {
+          hasStartedRef.current = true;
+          setIsLoading(false);
+        }
+        // Draw if this is current frame
+        if (i === frameIndexRef.current) drawCover(img);
+      };
+      img.onerror = () => {
+        // Still count it so we don't wait forever
+        loadedCountRef.current++;
+        if (!hasStartedRef.current && loadedCountRef.current >= 5) {
+          hasStartedRef.current = true;
+          setIsLoading(false);
+        }
+      };
+      img.src = src;
+    });
 
-    // Preload first 20 frames immediately
-    preloadBatch(0, Math.min(START_FRAME_COUNT, total));
-    // Preload remaining frames in background
-    if (total > START_FRAME_COUNT) {
-      preloadBatch(START_FRAME_COUNT, total);
-    }
-
-    // Draw first frame immediately if available
+    // If first frame loaded synchronously, start immediately
     if (imgRefs.current[0]) {
       drawCover(imgRefs.current[0]);
-      setIsReady(true);
+      setIsLoading(false);
     }
 
     // Set container height
@@ -111,7 +102,7 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
 
     // Scroll handler
     const onScroll = () => {
-      if (!container) return;
+      if (!container || isLoading) return;
       const rect = container.getBoundingClientRect();
       const scrolled = -rect.top;
       const maxScroll = (SCROLL_VH - 100) * (window.innerHeight / 100);
@@ -142,10 +133,10 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
     };
-  }, [isDesktop, usePoster, isReady]);
+  }, [isDesktop, isLoading]);
 
-  // Show poster while loading or for reduced-motion
-  if (usePoster || !isReady) {
+  // Loading state - show poster while frames load
+  if (isLoading) {
     return (
       <div
         style={{
@@ -161,7 +152,7 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
       >
         <img
           src={POSTER_PATH}
-          alt="Zen Garden"
+          alt="Loading..."
           style={{
             width: '100%',
             height: '100%',
