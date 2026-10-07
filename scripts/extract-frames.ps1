@@ -6,7 +6,7 @@ param(
     [int]$TargetWidth      = 1280,
     [int]$FrameCountTarget = 150,
     [int]$WebpQuality      = 80,
-    [double]$FpsRate       = 5
+    [double]$FpsRate       = 10
 )
 
 $ErrorActionPreference = "Stop"
