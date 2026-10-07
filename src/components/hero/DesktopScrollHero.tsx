@@ -4,7 +4,7 @@ import { FRAME_COUNT, FRAMES_DIR, POSTER_PATH } from '@/lib/config';
 import { useFramePreloader } from '@/hooks/useFramePreloader';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 
-const SCROLL_VH = 300;
+const SCROLL_VH = 500;
 const DPR = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
 function buildFramePaths(count: number): string[] {
