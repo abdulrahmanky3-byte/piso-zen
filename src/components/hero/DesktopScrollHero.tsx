@@ -21,12 +21,9 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameIndexRef = useRef(0);
   const [frameIndex, setFrameIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
   const isDesktop = useIsDesktop();
   const preloadProgress = useFramePreloader(isDesktop ?? false);
   const imgRefs = useRef<HTMLImageElement[]>([]);
-  const loadedCountRef = useRef(0);
-  const hasStartedRef = useRef(false);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -71,35 +68,28 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         imgRefs.current[i] = img;
-        loadedCountRef.current++;
-        if (!hasStartedRef.current && loadedCountRef.current >= 1) {
-          hasStartedRef.current = true;
-          setIsLoading(false);
-        }
+        // Draw if this is current frame
         if (i === frameIndexRef.current) drawCover(img);
       };
       img.onerror = () => {
-        loadedCountRef.current++;
-        if (!hasStartedRef.current && loadedCountRef.current >= 5) {
-          hasStartedRef.current = true;
-          setIsLoading(false);
-        }
+        // Skip failed frames silently
       };
       img.src = src;
     });
 
-    // If first frame loaded synchronously, start immediately
+    // Draw first frame immediately if available
     if (imgRefs.current[0]) {
       drawCover(imgRefs.current[0]);
-      setIsLoading(false);
     }
 
-    // Scroll handler using native scroll
+    // Set container height
+    container.style.height = `${SCROLL_VH}vh`;
+
+    // Scroll handler — uses refs, no state in dependency array
     const onScroll = () => {
-      if (!container || isLoading) return;
+      if (!container) return;
       const rect = container.getBoundingClientRect();
       const scrolled = -rect.top;
-      // Container is SCROLL_VH tall, we want 0→1 progress across that height
       const maxScroll = SCROLL_VH * (window.innerHeight / 100);
       const progress = Math.min(Math.max(scrolled / maxScroll, 0), 1);
       const index = Math.min(Math.floor(progress * total), total - 1);
@@ -128,22 +118,7 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onResize);
     };
-  }, [isDesktop, isLoading]);
-
-  // Loading state - show poster while frames load
-  if (isLoading) {
-    return (
-      <div style={{ position: 'relative', width: '100%', height: `${SCROLL_VH}vh` }}>
-        <div style={{ position: 'sticky', top: 0, width: '100%', height: '100vh' }}>
-          <img
-            src={POSTER_PATH}
-            alt="Loading..."
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          />
-        </div>
-      </div>
-    );
-  }
+  }, [isDesktop]); // Only depends on isDesktop
 
   return (
     <>
