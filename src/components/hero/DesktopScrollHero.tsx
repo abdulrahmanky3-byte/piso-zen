@@ -46,7 +46,7 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
     canvas.height = window.innerHeight * DPR;
     const ctx = canvas.getContext('2d')!;
 
-    // Draw with cover-fit
+    // Draw with cover-fit — maintains aspect ratio, no stretch
     const drawCover = (img: HTMLImageElement) => {
       const srcRatio = img.naturalWidth / img.naturalHeight;
       const viewRatio = window.innerWidth / window.innerHeight;
@@ -74,17 +74,19 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
       img.src = src;
     });
 
-    // Draw first frame
+    // Draw first frame immediately
     if (imgRefs.current[0]) {
       drawCover(imgRefs.current[0]);
     }
 
-    // Scroll handler
+    // Scroll handler — calculate progress based on container position
     const onScroll = () => {
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const scrolled = -rect.top;
-      const maxScroll = (SCROLL_VH - 100) * (window.innerHeight / 100);
+      // rect.top goes from 0 (container at top of viewport) to -(container height - viewport height)
+      // We want progress 0→1 as we scroll through the container
+      const scrolled = Math.abs(rect.top);
+      const maxScroll = container.offsetHeight - window.innerHeight;
       const progress = Math.min(Math.max(scrolled / maxScroll, 0), 1);
       const index = Math.min(Math.floor(progress * total), total - 1);
 
@@ -115,14 +117,13 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
   }, [isDesktop]);
 
   return (
-    // OUTER TRACK: 400vh tall scroll container
+    // OUTER TRACK: tall scroll container
     <div
       ref={containerRef}
       style={{
         position: 'relative',
         width: '100%',
         height: `${SCROLL_VH}vh`,
-        backgroundColor: '#0a0a0a',
       }}
     >
       {/* STICKY VIEWPORT: locks to screen */}
@@ -132,11 +133,10 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
           top: 0,
           width: '100%',
           height: '100vh',
-          overflow: 'hidden',
           backgroundColor: '#0a0a0a',
         }}
       >
-        {/* CANVAS: fills sticky viewport */}
+        {/* CANVAS: fills the sticky viewport perfectly */}
         <canvas
           ref={canvasRef}
           style={{
