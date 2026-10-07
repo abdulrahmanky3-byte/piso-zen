@@ -1,4 +1,4 @@
-export const FRAME_COUNT = 300;
+export const FRAME_COUNT = 200;
 export const FRAMES_DIR = '/frames';
 export const FRAMES_PATTERN = 'f_%04d.webp';
 export const POSTER_PATH = '/images/poster.webp';
