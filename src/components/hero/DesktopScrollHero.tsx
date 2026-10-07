@@ -4,7 +4,7 @@ import { FRAME_COUNT, FRAMES_DIR } from '@/lib/config';
 import { useFramePreloader } from '@/hooks/useFramePreloader';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 
-const SCROLL_VH = 400;
+const SCROLL_VH = 300;
 const DPR = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
 function buildFramePaths(count: number): string[] {
@@ -41,51 +41,61 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
     const frames = buildFramePaths(FRAME_COUNT);
     const total = frames.length;
 
-    // Set canvas resolution
-    canvas.width = window.innerWidth * DPR;
-    canvas.height = window.innerHeight * DPR;
+    // Set canvas resolution to match viewport at DPR
+    const updateCanvasSize = () => {
+      canvas.width = window.innerWidth * DPR;
+      canvas.height = window.innerHeight * DPR;
+    };
+    updateCanvasSize();
     const ctx = canvas.getContext('2d')!;
 
-    // Draw with cover-fit — maintains aspect ratio, no stretch
+    // Draw image with cover-fit (maintains aspect ratio, no stretch)
     const drawCover = (img: HTMLImageElement) => {
       const srcRatio = img.naturalWidth / img.naturalHeight;
       const viewRatio = window.innerWidth / window.innerHeight;
       let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
+
       if (srcRatio > viewRatio) {
+        // Image is wider than viewport — crop sides
         sh = img.naturalHeight * (viewRatio / srcRatio);
         sy = (img.naturalHeight - sh) / 2;
       } else {
+        // Image is taller than viewport — crop top/bottom
         sw = img.naturalWidth * (srcRatio / viewRatio);
         sx = (img.naturalWidth - sw) / 2;
       }
+
       ctx.clearRect(0, 0, canvas.width / DPR, canvas.height / DPR);
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width / DPR, canvas.height / DPR);
     };
 
-    // Preload ALL frames
+    // Preload ALL frames immediately
     frames.forEach((src, i) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         imgRefs.current[i] = img;
+        // Draw if this is the current frame
         if (i === frameIndexRef.current) drawCover(img);
       };
-      img.onerror = () => {};
+      img.onerror = () => {
+        // Silently skip failed frames
+      };
       img.src = src;
     });
 
-    // Draw first frame immediately
+    // Draw first frame immediately if available
     if (imgRefs.current[0]) {
       drawCover(imgRefs.current[0]);
     }
 
-    // Scroll handler — calculate progress based on container position
+    // Scroll handler — calculate progress based on container position in viewport
     const onScroll = () => {
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      // rect.top goes from 0 (container at top of viewport) to -(container height - viewport height)
-      // We want progress 0→1 as we scroll through the container
-      const scrolled = Math.abs(rect.top);
+      // When rect.top = 0, we're at the start (progress = 0)
+      // When rect.top = -(containerHeight - viewportHeight), we're at the end (progress = 1)
+      const scrolled = -rect.top;
       const maxScroll = container.offsetHeight - window.innerHeight;
       const progress = Math.min(Math.max(scrolled / maxScroll, 0), 1);
       const index = Math.min(Math.floor(progress * total), total - 1);
@@ -101,10 +111,9 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
 
-    // Resize handler
+    // Handle window resize
     const onResize = () => {
-      canvas.width = window.innerWidth * DPR;
-      canvas.height = window.innerHeight * DPR;
+      updateCanvasSize();
       const img = imgRefs.current[frameIndexRef.current];
       if (img) drawCover(img);
     };
@@ -117,26 +126,21 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
   }, [isDesktop]);
 
   return (
-    // OUTER TRACK: tall scroll container
-    <div
-      ref={containerRef}
-      style={{
-        position: 'relative',
-        width: '100%',
-        height: `${SCROLL_VH}vh`,
-      }}
-    >
-      {/* STICKY VIEWPORT: locks to screen */}
+    <>
+      {/* FIXED CANVAS LAYER — stays locked to viewport during scroll */}
       <div
         style={{
-          position: 'sticky',
+          position: 'fixed',
           top: 0,
-          width: '100%',
+          left: 0,
+          width: '100vw',
           height: '100vh',
+          zIndex: 1,
+          pointerEvents: 'none',
           backgroundColor: '#0a0a0a',
+          overflow: 'hidden',
         }}
       >
-        {/* CANVAS: fills the sticky viewport perfectly */}
         <canvas
           ref={canvasRef}
           style={{
@@ -146,7 +150,18 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
           }}
         />
       </div>
-    </div>
+
+      {/* SCROLL TRACK — provides scroll distance for animation */}
+      <div
+        ref={containerRef}
+        style={{
+          position: 'relative',
+          width: '100%',
+          height: `${SCROLL_VH}vh`,
+          zIndex: 0,
+        }}
+      />
+    </>
   );
 });
 
