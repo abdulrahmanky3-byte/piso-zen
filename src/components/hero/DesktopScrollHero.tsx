@@ -1,7 +1,6 @@
 'use client';
-import React, { useRef, useState, useEffect, memo } from 'react';
+import React, { useRef, useEffect, memo } from 'react';
 import { FRAME_COUNT, FRAMES_DIR } from '@/lib/config';
-import { useFramePreloader } from '@/hooks/useFramePreloader';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 
 const SCROLL_VH = 300;
@@ -19,24 +18,21 @@ function buildFramePaths(count: number): string[] {
 const DesktopScrollHero = memo(function DesktopScrollHero() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const frameIndexRef = useRef(0);
-  const [frameIndex, setFrameIndex] = useState(0);
-  const isDesktop = useIsDesktop();
-  const preloadProgress = useFramePreloader(isDesktop ?? false);
   const imgRefs = useRef<HTMLImageElement[]>([]);
+  const isDesktop = useIsDesktop();
 
   useEffect(() => {
     if (!isDesktop) return;
+
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
 
     // Check prefers-reduced-motion
     if (typeof window !== 'undefined') {
       const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
       if (mql.matches) return;
     }
-
-    const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas) return;
 
     const frames = buildFramePaths(FRAME_COUNT);
     const total = frames.length;
@@ -49,7 +45,7 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
     updateCanvasSize();
     const ctx = canvas.getContext('2d')!;
 
-    // Draw with cover-fit (maintains aspect ratio, no stretch)
+    // Draw with cover-fit
     const drawCover = (img: HTMLImageElement) => {
       const srcRatio = img.naturalWidth / img.naturalHeight;
       const viewRatio = window.innerWidth / window.innerHeight;
@@ -67,24 +63,19 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width / DPR, canvas.height / DPR);
     };
 
-    // Preload ALL frames
+    // Preload all frames
     frames.forEach((src, i) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         imgRefs.current[i] = img;
-        if (i === frameIndexRef.current) drawCover(img);
+        // Draw first frame immediately
+        if (i === 0) drawCover(img);
       };
-      img.onerror = () => {};
       img.src = src;
     });
 
-    // Draw first frame immediately
-    if (imgRefs.current[0]) {
-      drawCover(imgRefs.current[0]);
-    }
-
-    // Scroll handler — maps scroll progress to frame index
+    // Scroll handler
     const onScroll = () => {
       if (!container) return;
       const rect = container.getBoundingClientRect();
@@ -93,12 +84,8 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
       const progress = Math.min(Math.max(scrolled / maxScroll, 0), 1);
       const index = Math.min(Math.floor(progress * total), total - 1);
 
-      if (index !== frameIndexRef.current) {
-        frameIndexRef.current = index;
-        setFrameIndex(index);
-        const img = imgRefs.current[index];
-        if (img) drawCover(img);
-      }
+      const img = imgRefs.current[index];
+      if (img) drawCover(img);
     };
 
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -107,7 +94,7 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
     // Resize handler
     const onResize = () => {
       updateCanvasSize();
-      const img = imgRefs.current[frameIndexRef.current];
+      const img = imgRefs.current[0];
       if (img) drawCover(img);
     };
     window.addEventListener('resize', onResize);
@@ -119,7 +106,6 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
   }, [isDesktop]);
 
   return (
-    // OUTER TRACK: 300vh tall scroll container
     <div
       ref={containerRef}
       style={{
@@ -129,7 +115,6 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
         backgroundColor: '#0a0a0a',
       }}
     >
-      {/* STICKY VIEWPORT: locks to screen */}
       <div
         style={{
           position: 'sticky',
@@ -140,7 +125,6 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
           backgroundColor: '#0a0a0a',
         }}
       >
-        {/* CANVAS: fills the sticky viewport */}
         <canvas
           ref={canvasRef}
           style={{
