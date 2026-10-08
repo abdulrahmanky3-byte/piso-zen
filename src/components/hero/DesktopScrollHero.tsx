@@ -3,7 +3,7 @@ import React, { useRef, useEffect, memo } from 'react';
 import { FRAME_COUNT, FRAMES_DIR } from '@/lib/config';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
 
-const SCROLL_VH = 300;
+const SCROLL_VH = 700;
 const DPR = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
 function buildFramePaths(count: number): string[] {
@@ -45,7 +45,7 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
     updateCanvasSize();
     const ctx = canvas.getContext('2d')!;
 
-    // Draw with cover-fit
+    // Draw with cover-fit (maintains aspect ratio, no stretch)
     const drawCover = (img: HTMLImageElement) => {
       const srcRatio = img.naturalWidth / img.naturalHeight;
       const viewRatio = window.innerWidth / window.innerHeight;
@@ -63,7 +63,7 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width / DPR, canvas.height / DPR);
     };
 
-    // Preload all frames
+    // Preload ALL frames immediately
     frames.forEach((src, i) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -72,10 +72,13 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
         // Draw first frame immediately
         if (i === 0) drawCover(img);
       };
+      img.onerror = () => {
+        // Silently skip failed frames
+      };
       img.src = src;
     });
 
-    // Scroll handler
+    // Scroll handler — maps scroll progress to frame index
     const onScroll = () => {
       if (!container) return;
       const rect = container.getBoundingClientRect();
@@ -106,23 +109,19 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
   }, [isDesktop]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        position: 'relative',
-        width: '100%',
-        height: `${SCROLL_VH}vh`,
-        backgroundColor: '#0a0a0a',
-      }}
-    >
+    <>
+      {/* FIXED CANVAS LAYER — stays locked to viewport */}
       <div
         style={{
-          position: 'sticky',
+          position: 'fixed',
           top: 0,
-          width: '100%',
+          left: 0,
+          width: '100vw',
           height: '100vh',
-          overflow: 'hidden',
+          zIndex: 1,
+          pointerEvents: 'none',
           backgroundColor: '#0a0a0a',
+          overflow: 'hidden',
         }}
       >
         <canvas
@@ -134,7 +133,18 @@ const DesktopScrollHero = memo(function DesktopScrollHero() {
           }}
         />
       </div>
-    </div>
+
+      {/* SCROLL TRACK — 700vh provides smooth scroll distance */}
+      <div
+        ref={containerRef}
+        style={{
+          position: 'relative',
+          width: '100%',
+          height: `${SCROLL_VH}vh`,
+          zIndex: 0,
+        }}
+      />
+    </>
   );
 });
 
